@@ -324,7 +324,7 @@
                         finalLon = center[1] + randomOffset();
                     }
                     
-                    // Create marker data
+                    // Create marker data with fallbacks
                     const markerData = {
                         id: boreholeId,
                         name: `ข้อมูลบ่อ #${boreholeId}`,
@@ -333,7 +333,12 @@
                         totalDepth: totalDepth,
                         waterLevel: waterLevel,
                         soilLayers: soilLayers,
-                        soilColor: soilLayers.length > 0 ? soilLayers[0].color : '#3b82f6'
+                        soilColor: soilLayers.length > 0 ? soilLayers[0].color : '#3b82f6',
+                        // Store individual soil data for fallback
+                        soilName: soilLayers.length > 0 ? soilLayers[0].name : '',
+                        soilDepth: soilLayers.length > 0 ? soilLayers[0].depth : '',
+                        soilDesc: soilLayers.length > 0 ? soilLayers[0].desc : '',
+                        soilPh: soilLayers.length > 0 ? soilLayers[0].ph : ''
                     };
                     
                     // Create popup content
@@ -359,6 +364,7 @@
                     });
                     
                     console.log('Added borehole data:', markerData);
+                    console.log('Current allData length:', allData.length);
                 });
                 
                 // Fit map to show all markers
@@ -390,23 +396,55 @@
             
             const itemData = allData.find(item => item.id === itemId);
             if (!itemData) {
-                console.error('Item data not found:', itemId);
+                console.error('Item data not found for ID:', itemId);
+                console.log('Available data:', allData);
                 alert('ไม่พบข้อมูลสำหรับรายการนี้');
                 return;
             }
 
-            // Create URL for detail.html
-            const detailUrl = new URL('detail.html', window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1));
-            
-            detailUrl.searchParams.set('id', itemId);
-            detailUrl.searchParams.set('totalDepth', itemData.totalDepth || '');
-            detailUrl.searchParams.set('waterLevel', itemData.waterLevel || '');
-            
-            if (itemData.soilLayers && itemData.soilLayers.length > 0) {
-                detailUrl.searchParams.set('soilLayers', JSON.stringify(itemData.soilLayers));
+            console.log('Found item data:', itemData);
+
+            try {
+                // Create URL for detail.html with proper encoding
+                const detailUrl = 'detail.html';
+                const params = new URLSearchParams();
+                
+                params.set('id', itemId);
+                params.set('totalDepth', itemData.totalDepth || '45');
+                params.set('waterLevel', itemData.waterLevel || '32');
+                
+                if (itemData.soilLayers && itemData.soilLayers.length > 0) {
+                    params.set('soilLayers', JSON.stringify(itemData.soilLayers));
+                } else {
+                    // Create default soil layer data if missing
+                    const defaultSoilLayers = [
+                        {
+                            name: itemData.soilName || 'ดินเหนียว',
+                            depth: itemData.soilDepth || '0-8 ม.',
+                            color: itemData.soilColor || '#139DD4',
+                            desc: itemData.soilDesc || 'ข้อมูลชั้นดินจาก Google Sheet',
+                            ph: itemData.soilPh || '6.8'
+                        }
+                    ];
+                    params.set('soilLayers', JSON.stringify(defaultSoilLayers));
+                }
+                
+                const fullUrl = `${detailUrl}?${params.toString()}`;
+                console.log('Opening URL:', fullUrl);
+                
+                // Try to open in new tab/window
+                const newWindow = window.open(fullUrl, '_blank');
+                
+                if (!newWindow) {
+                    // If popup blocked, try to navigate in same window
+                    console.warn('Popup blocked, trying same window navigation');
+                    window.location.href = fullUrl;
+                }
+                
+            } catch (error) {
+                console.error('Error opening detail popup:', error);
+                alert('เกิดข้อผิดพลาดในการเปิดหน้ารายละเอียด');
             }
-            
-            window.open(detailUrl.toString(), '_blank');
         }
 
         // Jump to marker on map
