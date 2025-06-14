@@ -1,0 +1,1401 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แผนที่น้ำบาดาล</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY="
+        crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo="
+        crossorigin=""></script>
+        
+    <!-- MarkerCluster plugin for better display of many points -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css" />
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
+    
+    <style>
+        /* Responsive map height - optimized for mobile and desktop */
+        #map { 
+            height: 55vh; 
+            min-height: 400px;
+            max-height: 600px;
+        }
+        
+        /* Mobile optimization */
+        @media (max-width: 768px) {
+            #map { 
+                height: 45vh; 
+                min-height: 300px;
+                max-height: 400px;
+            }
+            
+            /* Optimize data cards for mobile */
+            .data-section {
+                max-height: 50vh;
+                overflow-y: auto;
+            }
+        }
+        
+        @media (max-width: 640px) {
+            #map { 
+                height: 40vh; 
+                min-height: 250px;
+                max-height: 350px;
+            }
+            
+            .data-section {
+                max-height: 55vh;
+            }
+        }
+        
+        /* Large screens optimization */
+        @media (min-width: 1024px) {
+            #map {
+                height: 60vh;
+                min-height: 500px;
+            }
+        }
+        
+        /* Custom marker cluster styling */
+        .marker-cluster-small {
+            background-color: rgba(181, 226, 140, 0.6);
+        }
+        .marker-cluster-small div {
+            background-color: rgba(110, 204, 57, 0.6);
+        }
+        .marker-cluster-medium {
+            background-color: rgba(241, 211, 87, 0.6);
+        }
+        .marker-cluster-medium div {
+            background-color: rgba(240, 194, 12, 0.6);
+        }
+        .marker-cluster-large {
+            background-color: rgba(253, 156, 115, 0.6);
+        }
+        .marker-cluster-large div {
+            background-color: rgba(241, 128, 23, 0.6);
+        }
+        .marker-cluster {
+            background-clip: padding-box;
+            border-radius: 20px;
+        }
+        .marker-cluster div {
+            width: 30px;
+            height: 30px;
+            margin-left: 5px;
+            margin-top: 5px;
+            text-align: center;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        /* Text truncation utilities for better mobile display */
+        .line-clamp-1 {
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .line-clamp-2 {
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        /* Custom marker styles for smooth transitions */
+        .custom-marker {
+            transition: all 0.3s ease;
+        }
+        
+        .custom-marker div {
+            transition: all 0.3s ease;
+        }
+        
+        /* Custom slider styles for detail popup */
+        .water-level-slider {
+            -webkit-appearance: none;
+            appearance: none;
+            height: 8px;
+            border-radius: 5px;
+            outline: none;
+            opacity: 0.8;
+            transition: opacity 0.2s;
+        }
+        
+        .water-level-slider:hover {
+            opacity: 1;
+        }
+        
+        .water-level-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        .water-level-slider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #2563eb;
+            cursor: pointer;
+            border: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        
+        /* Soil layer visual styles */
+        .soil-layer {
+            position: relative;
+            border-radius: 8px;
+            margin-bottom: 4px;
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+        
+        .soil-layer:hover {
+            border-color: #1f2937;
+            transform: translateX(4px);
+        }
+        
+        .depth-indicator {
+            position: absolute;
+            right: 8px;
+            top: 50%;
+            transform: translateY(-50%);
+            background: rgba(0,0,0,0.6);
+            color: white;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        /* Water level indicator */
+        .water-level-line {
+            position: absolute;
+            right: 0;
+            width: 100%;
+            height: 2px;
+            background: linear-gradient(to right, transparent 0%, #3b82f6 20%, #3b82f6 80%, transparent 100%);
+            z-index: 10;
+            transition: top 0.3s ease;
+        }
+        
+        .water-level-label {
+            position: absolute;
+            right: 0;
+            background: #3b82f6;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            font-weight: bold;
+            transform: translateY(-50%);
+            white-space: nowrap;
+            z-index: 11;
+            transition: top 0.3s ease;
+        }
+    </style>
+</head>
+<body class="flex flex-col h-screen">
+
+    <header class="bg-sky-600 text-white p-3 md:p-4 text-center shadow-md">
+        <h1 class="text-lg md:text-xl lg:text-2xl font-semibold">แผนที่ข้อมูลน้ำบาดาล</h1>
+        
+        <!-- Filter Controls -->
+        <div class="mt-3 flex flex-wrap justify-center gap-2 text-sm">
+            <select id="filterType" class="p-1 md:p-2 rounded text-gray-700 bg-white border border-gray-300 text-xs md:text-sm">
+                <option value="">ทุกประเภท</option>
+                <option value="ชั้นดิน">ชั้นดิน</option>
+                <option value="บ่อบาดาล">บ่อบาดาล</option>
+                <option value="น้ำผิวดิน">น้ำผิวดิน</option>
+                <option value="อื่นๆ">อื่นๆ</option>
+            </select>
+            
+            <select id="filterStatus" class="p-1 md:p-2 rounded text-gray-700 bg-white border border-gray-300 text-xs md:text-sm">
+                <option value="">ทุกสถานะ</option>
+                <option value="ใหม่">ใหม่</option>
+                <option value="กำลังดำเนินการ">กำลังดำเนินการ</option>
+                <option value="รอการตรวจสอบ">รอการตรวจสอบ</option>
+                <option value="เผยแพร่แล้ว">เผยแพร่แล้ว</option>
+                <option value="ถูกระงับ">ถูกระงับ</option>
+            </select>
+            
+            <input type="text" id="searchInput" placeholder="ค้นหาชื่อหรือรหัสบ่อ" 
+                class="p-1 md:p-2 rounded text-gray-700 bg-white border border-gray-300 text-xs md:text-sm min-w-0 flex-1 md:flex-none md:w-auto">
+            
+            <button id="applyFilters" class="bg-white text-sky-700 px-2 md:px-3 py-1 md:py-2 rounded shadow hover:bg-sky-100 text-xs md:text-sm">
+                กรอง
+            </button>
+            
+            <button id="resetFilters" class="bg-sky-700 text-white px-2 md:px-3 py-1 md:py-2 rounded shadow hover:bg-sky-800 border border-white text-xs md:text-sm">
+                รีเซ็ต
+            </button>
+        </div>
+    </header>
+
+    <main class="flex-grow flex flex-col">
+        <div id="map" class="flex-1"></div>
+        
+        <!-- ข้อมูลเพิ่มเติม -->
+        <div class="bg-white border-t border-gray-200 p-3 md:p-4 data-section">
+            <h2 class="text-lg md:text-xl font-semibold mb-3 md:mb-4 text-gray-800">ข้อมูลเพิ่มเติม</h2>
+            
+            <!-- Loading State -->
+            <div id="dataLoading" class="text-center text-gray-500 py-4">
+                <div class="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-sky-600"></div>
+                <span class="ml-2 text-sm md:text-base">กำลังโหลดข้อมูล...</span>
+            </div>
+            
+            <!-- Data Cards Container -->
+            <div id="dataCards" class="hidden">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 md:gap-4">
+                    <!-- Data cards will be dynamically inserted here -->
+                </div>
+                
+                <!-- Pagination -->
+                <div id="pagination" class="mt-4 flex justify-center items-center space-x-2">
+                    <button id="prevPage" class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm min-w-[80px]">
+                        ก่อนหน้า
+                    </button>
+                    <span id="pageInfo" class="text-sm text-gray-600 px-2 text-center min-w-[80px]">หน้า 1 จาก 1</span>
+                    <button id="nextPage" class="px-3 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50 disabled:cursor-not-allowed text-sm min-w-[80px]">
+                        ถัดไป
+                    </button>
+                </div>
+            </div>
+            
+            <!-- No Data State -->
+            <div id="noData" class="hidden text-center text-gray-500 py-4">
+                <div class="text-sm md:text-base">ไม่พบข้อมูลที่ตรงตามเงื่อนไขการค้นหา</div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Modal for detailed view -->
+    <div id="detailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 overflow-y-auto">
+        <div class="flex items-center justify-center min-h-screen p-4">
+            <div class="bg-gray-50 rounded-lg shadow-xl max-w-6xl w-full max-h-screen overflow-y-auto">
+                <!-- Modal Header -->
+                <div class="bg-blue-600 text-white p-4 rounded-t-lg flex justify-between items-center sticky top-0 z-20">
+                    <h2 id="modalTitle" class="text-lg md:text-xl font-semibold">ข้อมูลของบ่อ</h2>
+                    <button id="closeModal" class="text-white hover:text-gray-300 hover:bg-blue-700 p-2 rounded">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Modal Content -->
+                <div id="modalContent" class="p-6 space-y-6">
+                    <!-- Content will be dynamically inserted here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="bg-gray-100 p-4 text-center text-sm text-gray-600">
+        <p>&copy; 2025 ข้อมูลน้ำบาดาล</p>
+    </footer>
+
+    <script>
+        // Global variables to store markers and data for filtering
+        let allMarkers = [];
+        let allData = []; // Store all data for the data cards section
+        let markerCluster;
+        let dataFormat = 'unknown'; // 'borehole' or 'location'
+        let currentPage = 1;
+        let itemsPerPage = getItemsPerPage(); // Dynamic items per page based on screen size
+
+        // Helper function to check if a value is numeric
+        function isNumeric(value) {
+            return !isNaN(parseFloat(value)) && isFinite(value);
+        }
+
+        // Helper function to properly parse CSV row with quoted values
+        function parseCSVRow(row) {
+            const result = [];
+            let current = '';
+            let inQuotes = false;
+            
+            for (let i = 0; i < row.length; i++) {
+                const char = row[i];
+                const nextChar = row[i + 1];
+                
+                if (char === '"') {
+                    if (inQuotes && nextChar === '"') {
+                        // Handle escaped quotes
+                        current += '"';
+                        i++; // Skip next quote
+                    } else {
+                        // Toggle quote state
+                        inQuotes = !inQuotes;
+                    }
+                } else if (char === ',' && !inQuotes) {
+                    // Found delimiter outside quotes
+                    result.push(current.trim());
+                    current = '';
+                } else {
+                    // Regular character
+                    current += char;
+                }
+            }
+            
+            // Add the last field
+            result.push(current.trim());
+            
+            return result;
+        }
+
+        // Function to get items per page based on screen size
+        function getItemsPerPage() {
+            const width = window.innerWidth;
+            if (width < 640) return 4; // Mobile: 4 items
+            if (width < 1024) return 6; // Tablet: 6 items
+            if (width < 1280) return 9; // Desktop: 9 items
+            return 12; // Large desktop: 12 items
+        }
+        
+        // Update items per page on window resize
+        window.addEventListener('resize', function() {
+            const newItemsPerPage = getItemsPerPage();
+            if (newItemsPerPage !== itemsPerPage) {
+                itemsPerPage = newItemsPerPage;
+                currentPage = 1; // Reset to first page
+                renderDataCards();
+                setupPagination();
+            }
+        });
+        
+        // Function to create responsive marker based on zoom level
+        function createResponsiveMarker(color) {
+            const currentZoom = map.getZoom();
+            let size, borderWidth;
+            
+            // ปรับขนาดตาม zoom level
+            if (currentZoom <= 10) {
+                // Zoom ต่ำ - marker ใหญ่
+                size = 20;
+                borderWidth = 3;
+            } else if (currentZoom <= 13) {
+                // Zoom กลาง - marker ปานกลาง
+                size = 16;
+                borderWidth = 2;
+            } else {
+                // Zoom สูง - marker เล็กแต่ชัด
+                size = 12;
+                borderWidth = 2;
+            }
+            
+            const totalSize = size + (borderWidth * 2);
+            
+            return L.divIcon({
+                className: 'custom-marker',
+                html: `<div style="
+                    background-color: ${color}; 
+                    width: ${size}px; 
+                    height: ${size}px; 
+                    border-radius: 50%; 
+                    border: ${borderWidth}px solid white; 
+                    box-shadow: 0 0 4px rgba(0,0,0,0.6);
+                    transition: all 0.3s ease;
+                "></div>`,
+                iconSize: [totalSize, totalSize],
+                iconAnchor: [totalSize/2, totalSize/2]
+            });
+        }
+        
+        // Function to update marker when zoom changes
+        function updateMarkerOnZoom(marker, color) {
+            const newIcon = createResponsiveMarker(color);
+            marker.setIcon(newIcon);
+        }
+        
+        // Function to update all markers when zoom changes
+        function updateAllMarkersOnZoom() {
+            allMarkers.forEach(markerData => {
+                if (markerData.marker) {
+                    const color = markerData.soilColor || getColor(markerData.status || markerData.id);
+                    updateMarkerOnZoom(markerData.marker, color);
+                }
+            });
+        }
+
+        // Helper function to darken a color for better text visibility
+        function darkenColor(color) {
+            // For named colors, use a mapping to darker versions
+            const colorMap = {
+                'brown': '#5D4037',
+                'tan': '#8D6E63',
+                'gold': '#B7950B',
+                'gray': '#424242',
+                'lightgray': '#757575',
+                '#D2B48C': '#A67C52', // Tan/light brown
+                '#DAA520': '#B7950B', // Goldenrod
+                '#A9A9A9': '#696969', // Dark gray
+                '#D3D3D3': '#A9A9A9', // Light gray
+                '#CCCCCC': '#999999'  // Generic light gray
+            };
+            
+            if (colorMap[color]) {
+                return colorMap[color];
+            }
+            
+            // For hex colors, darken them programmatically
+            if (color.startsWith('#')) {
+                // Parse the hex color
+                let r = parseInt(color.slice(1, 3), 16);
+                let g = parseInt(color.slice(3, 5), 16);
+                let b = parseInt(color.slice(5, 7), 16);
+                
+                // Darken by reducing each component
+                r = Math.max(0, Math.floor(r * 0.7));
+                g = Math.max(0, Math.floor(g * 0.7));
+                b = Math.max(0, Math.floor(b * 0.7));
+                
+                // Convert back to hex
+                return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+            }
+            
+            // Default fallback
+            return '#333333';
+        }
+        
+        // Function to get color based on status
+        function getColor(status) {
+            if (!status) return '#3b82f6'; // blue default
+            
+            status = status.toLowerCase();
+            if (status.includes('ใหม่')) return '#22c55e'; // green
+            if (status.includes('กำลังดำเนินการ')) return '#f97316'; // orange
+            if (status.includes('รอการตรวจสอบ')) return '#8b5cf6'; // purple
+            if (status.includes('เผยแพร่แล้ว')) return '#ec4899'; // pink
+            if (status.includes('ถูกระงับ')) return '#ef4444'; // red
+            if (status.includes('พฤติกรรม')) return '#10b981'; // emerald
+            
+            return '#3b82f6'; // blue default
+        }
+        
+        // Function to get CSS classes for status badges
+        function getStatusClass(status) {
+            if (!status) return 'bg-blue-100 text-blue-800';
+            
+            status = status.toLowerCase();
+            if (status.includes('ใหม่')) return 'bg-green-100 text-green-800';
+            if (status.includes('กำลังดำเนินการ')) return 'bg-orange-100 text-orange-800';
+            if (status.includes('รอการตรวจสอบ')) return 'bg-purple-100 text-purple-800';
+            if (status.includes('เผยแพร่แล้ว')) return 'bg-pink-100 text-pink-800';
+            if (status.includes('ถูกระงับ')) return 'bg-red-100 text-red-800';
+            if (status.includes('พฤติกรรม')) return 'bg-emerald-100 text-emerald-800';
+            
+            return 'bg-blue-100 text-blue-800';
+        }
+
+        // Initialize the map and set its view to a default location and zoom
+        const map = L.map('map').setView([13.7563, 100.5018], 6); // Default to Bangkok, zoom level 6
+
+        // Add a tile layer to the map (OpenStreetMap)
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+        
+        // Initialize marker cluster group
+        markerCluster = L.markerClusterGroup({
+            disableClusteringAtZoom: 15,
+            spiderfyOnMaxZoom: true,
+            showCoverageOnHover: false
+        }).addTo(map);
+        
+        // Add zoom event listener to update marker sizes
+        map.on('zoomend', function() {
+            updateAllMarkersOnZoom();
+        });
+
+        // --- Google Sheet Data Fetching ---
+        // IMPORTANT: Replace with your actual Google Sheet CSV URLs
+        // 1. In Google Sheets: File > Share > Publish to web
+        // 2. Choose "Comma-separated values (.csv)"
+        // 3. Copy the generated URL and paste it below.
+        // URL จาก Google Sheet ของคุณในรูปแบบ CSV
+        // วิธีการตั้งค่า: File > Share > Publish to web > เลือก CSV format
+        const googleSheetCsvUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSn30i6fduRSszPNUwWskmwK8-KKunVtFfqGAyyFBAzXWJx5C0uz_6iLhai-F2rdwFOxlGMNdEU2uT_/pub?gid=0&single=true&output=csv';
+
+        async function fetchSheetData() {
+            try {
+                // Clear existing markers and data
+                markerCluster.clearLayers();
+                allMarkers = [];
+                allData = [];
+                
+                const response = await fetch(googleSheetCsvUrl);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                const csvText = await response.text();
+                console.log('Raw CSV Data received:');
+                console.log(csvText); // แสดงข้อมูล CSV ทั้งหมด
+                
+                // Split by newline and clean
+                const rows = csvText.trim().split('\n');
+                console.log('Total rows:', rows.length);
+                console.log('Header row:', rows[0]); // แสดง header
+                
+                // Get header row to understand column mapping
+                const headerCols = parseCSVRow(rows[0]);
+                console.log('Header columns:', headerCols);
+                
+                // Remove the header row and filter out empty rows
+                const dataRows = rows.slice(1).filter(row => row.trim() && row.trim() !== '');
+                console.log('Data rows count:', dataRows.length);
+                
+                if (dataRows.length === 0) {
+                    throw new Error('ไม่พบข้อมูลในตาราง');
+                }
+
+                // Parse first few rows to understand the data structure
+                console.log('Sample parsed rows:');
+                dataRows.slice(0, 3).forEach((row, i) => {
+                    const parsed = parseCSVRow(row);
+                    console.log(`Row ${i+1}:`, parsed);
+                });
+
+                // Determine data format based on header
+                console.log('Analyzing header columns for format detection...');
+                
+                // Look for latitude/longitude columns (either Thai or English)
+                const latColIndex = headerCols.findIndex(col => 
+                    col.toLowerCase().includes('lat') || 
+                    col.toLowerCase().includes('ละติจูด') ||
+                    col.toLowerCase().includes('ลาติจูด')
+                );
+                const lonColIndex = headerCols.findIndex(col => 
+                    col.toLowerCase().includes('lon') || 
+                    col.toLowerCase().includes('ลองจิจูด') ||
+                    col.toLowerCase().includes('ลองจิจูด')
+                );
+                
+                // Look for borehole-specific columns
+                const idColIndex = headerCols.findIndex(col => 
+                    col.toLowerCase().includes('รหัส') || 
+                    col.toLowerCase().includes('id') ||
+                    col.toLowerCase().includes('บ่อ')
+                );
+                const depthColIndex = headerCols.findIndex(col => 
+                    col.toLowerCase().includes('ความลึก') || 
+                    col.toLowerCase().includes('depth') ||
+                    col.toLowerCase().includes('ลึก')
+                );
+                const waterColIndex = headerCols.findIndex(col => 
+                    col.toLowerCase().includes('ระดับน้ำ') || 
+                    col.toLowerCase().includes('water') ||
+                    col.toLowerCase().includes('น้ำบาดาล')
+                );
+                
+                // Fallback to fixed indices if column names are not found
+                // Based on the Google Sheet structure: ละติจูด, ลองจิจูด, รหัสบ่อ, ความลึกทั้งหมด, ระดับน้ำบาดาล, ชั้นดิน, ช่วงความลึก, รายละเอียด, สี, pH
+                if (latColIndex === -1) console.log('Using fallback for latitude index: 0');
+                if (lonColIndex === -1) console.log('Using fallback for longitude index: 1');
+                if (idColIndex === -1) console.log('Using fallback for ID index: 2');
+                if (depthColIndex === -1) console.log('Using fallback for depth index: 3');
+                if (waterColIndex === -1) console.log('Using fallback for water index: 4');
+                
+                const finalLatIndex = latColIndex >= 0 ? latColIndex : 0;
+                const finalLonIndex = lonColIndex >= 0 ? lonColIndex : 1;
+                const finalIdIndex = idColIndex >= 0 ? idColIndex : 2;
+                const finalDepthIndex = depthColIndex >= 0 ? depthColIndex : 3;
+                const finalWaterIndex = waterColIndex >= 0 ? waterColIndex : 4;
+                
+                console.log('Column indices found:', { 
+                    lat: finalLatIndex, 
+                    lon: finalLonIndex, 
+                    id: finalIdIndex, 
+                    depth: finalDepthIndex, 
+                    water: finalWaterIndex 
+                });
+                
+                // Determine format based on available columns
+                const hasCoordinates = finalLatIndex >= 0 && finalLonIndex >= 0;
+                const hasBoreholeData = finalIdIndex >= 0 || finalDepthIndex >= 0 || finalWaterIndex >= 0;
+                
+                if (hasCoordinates && hasBoreholeData) {
+                    dataFormat = 'borehole';
+                    console.log('Detected format: Borehole data with coordinates');
+                } else {
+                    dataFormat = 'location';
+                    console.log('Detected format: Location data');
+                }
+                
+                // Determine center for fallback coordinates
+                const center = [13.7563, 100.5018]; // Bangkok as default
+                
+                // Update filter options based on data format
+                populateFilterOptions();
+
+                // Process each data row from the Google Sheet
+                dataRows.forEach((row, index) => {
+                    // Parse the CSV row, handling quoted values correctly
+                    const columns = parseCSVRow(row);
+                    
+                    console.log(`Processing row ${index + 1}:`, columns); // Debug: แสดงข้อมูลแต่ละแถว
+                    
+                    // Skip rows with insufficient data
+                    if (columns.length < 3) {
+                        console.warn(`Skipping row ${index + 1} with insufficient data:`, row);
+                        return;
+                    }
+
+                    let lat, lon, popupContent;
+                    let markerData = {};
+                    let soilLayers = [];
+                    
+                    if (dataFormat === 'borehole') {
+                        // Use the final column indices (with fallback)
+                        console.log('Processing borehole data with final indices:', { 
+                            lat: finalLatIndex, 
+                            lon: finalLonIndex, 
+                            id: finalIdIndex, 
+                            depth: finalDepthIndex, 
+                            water: finalWaterIndex 
+                        });
+                        
+                        // Extract data using correct indices with fallback
+                        lat = finalLatIndex < columns.length ? parseFloat(columns[finalLatIndex]) : null;
+                        lon = finalLonIndex < columns.length ? parseFloat(columns[finalLonIndex]) : null;
+                        const boreholeId = finalIdIndex < columns.length ? 
+                            (columns[finalIdIndex] || `BH-${index + 1}`) : `BH-${index + 1}`;
+                        const totalDepth = finalDepthIndex < columns.length ? 
+                            (columns[finalDepthIndex] || 'ไม่ระบุ') : 'ไม่ระบุ';
+                        const waterLevel = finalWaterIndex < columns.length ? 
+                            (columns[finalWaterIndex] || 'ไม่ระบุ') : 'ไม่ระบุ';
+                        
+                        console.log('Extracted values:', { lat, lon, boreholeId, totalDepth, waterLevel });
+                        
+                        // Check if coordinates are valid
+                        if (isNaN(lat) || isNaN(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
+                            console.warn(`Invalid coordinates for row ${index + 1}, using random location`);
+                            // Generate random coordinates as fallback
+                            const center = [13.7563, 100.5018]; // Bangkok
+                            const randomOffset = () => (Math.random() - 0.5) * 0.05;
+                            lat = center[0] + randomOffset();
+                            lon = center[1] + randomOffset();
+                        }
+                        
+                        // Process soil layers if available - use fixed indices based on Google Sheet structure
+                        soilLayers = [];
+                        // Based on Google Sheet: ชั้นดิน(5), ช่วงความลึก(6), รายละเอียด(7), สี(8), pH(9)
+                        const soilNameIndex = 5;   // ชั้นดิน
+                        const soilDepthIndex = 6;  // ช่วงความลึก  
+                        const soilDescIndex = 7;   // รายละเอียด
+                        const soilColorIndex = 8;  // สี (hex หรือชื่อสี)
+                        const soilPhIndex = 9;     // ค่า pH
+                        
+                        console.log('Using fixed soil column indices:', { 
+                            name: soilNameIndex, 
+                            depth: soilDepthIndex, 
+                            desc: soilDescIndex,
+                            color: soilColorIndex, 
+                            ph: soilPhIndex 
+                        });
+                        
+                        if (soilNameIndex < columns.length && columns[soilNameIndex]) {
+                            const soilName = columns[soilNameIndex].trim();
+                            const depth = soilDepthIndex < columns.length ? columns[soilDepthIndex].trim() : '';
+                            const description = soilDescIndex < columns.length ? columns[soilDescIndex].trim() : '';
+                            const color = soilColorIndex < columns.length ? columns[soilColorIndex].trim() : '#CCCCCC';
+                            const ph = soilPhIndex < columns.length ? columns[soilPhIndex].trim() : '';
+                            
+                            console.log('Soil data found:', { soilName, depth, description, color, ph });
+                            
+                            if (soilName) {
+                                // Ensure color has # prefix if it's a hex color
+                                let finalColor = color;
+                                if (color && !color.startsWith('#') && /^[0-9A-Fa-f]{6}$/.test(color)) {
+                                    finalColor = '#' + color;
+                                } else if (!color || color === '') {
+                                    finalColor = '#CCCCCC';
+                                }
+                                
+                                soilLayers.push({ 
+                                    name: soilName, 
+                                    depth: depth || 'ไม่ระบุ', 
+                                    desc: description || '', 
+                                    color: finalColor,
+                                    ph: ph || '' 
+                                });
+                            }
+                        }
+                        
+                        popupContent = createBoreholePopup(boreholeId, totalDepth, waterLevel, soilLayers);
+                        
+                        markerData = {
+                            id: boreholeId,
+                            name: `ข้อมูลบ่อ #${boreholeId}`,
+                            type: 'บ่อบาดาล',
+                            status: 'เผยแพร่แล้ว',
+                            layers: soilLayers.length > 0 ? soilLayers.map(l => l.name).join(', ') : 'ไม่มีข้อมูลชั้นดิน',
+                            totalDepth: totalDepth,
+                            waterLevel: waterLevel,
+                            soilLayers: soilLayers,
+                            soilColor: soilLayers.length > 0 ? soilLayers[0].color : '#3b82f6',
+                            // เพิ่มข้อมูลเดิมสำหรับ debug
+                            originalData: columns
+                        };
+                        
+                        console.log('Created borehole markerData:', markerData);
+                    } else {
+                        // Location format - มีโอกาสน้อยที่จะเข้ามาตรงนี้หากข้อมูลจาก Google Sheet เป็นข้อมูลบ่อบาดาล
+                        console.warn('Processing as location data - this might be incorrect for borehole data');
+                        
+                        const locationName = columns[0] || 'ไม่ระบุชื่อ';
+                        const locationType = columns[1] || 'ไม่ระบุประเภท';
+                        const details = columns[2] || '';
+                        const participants = columns[3] || 'ไม่ระบุ';
+                        const status = columns[4] || 'ไม่ระบุสถานะ';
+                        const date = columns.length > 5 ? columns[5] || 'ไม่ระบุวันที่' : 'ไม่ระบุวันที่';
+                        
+                        // Generate random coordinates for display
+                        const center = [13.7563, 100.5018]; // Bangkok
+                        const randomOffset = () => (Math.random() - 0.5) * 0.05;
+                        lat = center[0] + randomOffset();
+                        lon = center[1] + randomOffset();
+                        
+                        popupContent = createLocationPopup(locationName, locationType, details, participants, status, date);
+                        
+                        markerData = {
+                            id: `LOC-${index + 1}`, // สร้าง ID สำหรับข้อมูลประเภท location
+                            name: locationName,
+                            type: locationType,
+                            status: status,
+                            details: details,
+                            participants: participants,
+                            date: date,
+                            soilColor: getColor(status),
+                            // เพิ่มข้อมูลเดิมสำหรับ debug
+                            originalData: columns
+                        };
+                        
+                        console.log('Created location markerData:', markerData);
+                    }
+                    
+                    // สร้าง custom icon ตามสีจาก Google Sheet
+                    const markerColor = markerData.soilColor || getColor(markerData.status || markerData.id);
+                    const markerIcon = createResponsiveMarker(markerColor);
+                    
+                    // เพิ่มมาร์กเกอร์ลงในแผนที่พร้อมป๊อปอัพ (ใช้ popup ธรรมดาสำหรับแสดงข้อมูลจาก Google Sheet)
+                    const marker = L.marker([lat, lon], { icon: markerIcon }).bindPopup(popupContent);
+                    
+                    // เพิ่ม event listener เพื่ออัพเดต marker เมื่อ zoom เปลี่ยน
+                    marker.on('add', function() {
+                        updateMarkerOnZoom(marker, markerColor);
+                    });
+                    
+                    marker.addTo(markerCluster);
+                    
+                    // Store the marker with its metadata for filtering
+                    allMarkers.push({
+                        marker: marker,
+                        soilLayers: soilLayers, // เพิ่มข้อมูล soilLayers สำหรับ modal
+                        ...markerData
+                    });
+                    
+                    // Also store data for the data cards section
+                    allData.push({
+                        ...markerData,
+                        lat: lat,
+                        lon: lon,
+                        soilLayers: soilLayers
+                    });
+                    
+                    console.log('Added to allData:', { ...markerData, lat, lon, soilLayers }); // Debug: ตรวจสอบข้อมูลที่เพิ่มเข้า allData
+                });
+                
+                // Adjust map view to fit all markers
+                if (markerCluster.getBounds().isValid()) {
+                    map.fitBounds(markerCluster.getBounds());
+                }
+                
+                // Update filter options based on the data
+                populateFilterOptions();
+                
+                // Initialize data cards display
+                displayDataCards();
+                
+                // Debug: แสดงข้อมูลสุดท้ายที่ได้
+                console.log('Final allData array:', allData);
+                console.log('Final allMarkers array:', allMarkers);
+                console.log('Total data items:', allData.length);
+                
+            } catch (error) {
+                console.error('Error fetching or parsing sheet data:', error);
+                
+                // Hide loading and show error message
+                const loading = document.getElementById('dataLoading');
+                const dataCards = document.getElementById('dataCards');
+                const noData = document.getElementById('noData');
+                    // เพิ่มมาร์กเกอร์ลงในแผนที่พร้อมป๊อปอัพ (ใช้ popup ธรรมดาสำหรับแสดงข้อมูลจาก Google Sheet)
+                    const marker = L.marker([lat, lon], { icon: markerIcon }).bindPopup(popupContent);('hidden');
+                    ('hidden');
+                    // เพิ่ม event listener เพื่ออัพเดต marker เมื่อ zoom เปลี่ยน
+                    marker.on('add', function() {
+                        updateMarkerOnZoom(marker, markerColor);te no data message to show error
+                    });ta.innerHTML = `
+                    
+                    marker.addTo(markerCluster);="text-sm md:text-base mb-2">ไม่สามารถโหลดข้อมูลจาก Google Sheet ได้</div>
+                    xt-xs text-gray-500">กรุณาตรวจสอบ URL และการตั้งค่าการเผยแพร่</div>
+                    // Store the marker with its metadata for filterings="text-xs text-gray-500 mt-2">URL ปัจจุบัน: ${googleSheetCsvUrl}</div>
+                    allMarkers.push({
+                        marker: marker,
+                        soilLayers: soilLayers, // เพิ่มข้อมูล soilLayers สำหรับ modal
+                        ...markerData
+                    });
+                    unction to create a simple popup for borehole data (for markers)
+                    // Also store data for the data cards section createBoreholePopup(boreholeId, totalDepth, waterLevel, soilLayers) {
+                    allData.push({
+                        ...markerData,
+                        lat: lat,
+                        lon: lon,oilLayers.forEach(layer => {
+                        soilLayers: soilLayers    soilLayersHtml += `<div class="p-2 rounded mb-1 text-xs" style="background-color: ${layer.color}; color: ${getTextColorForBackground(layer.color)};">${layer.name} (${layer.depth})</div>`;
+                    });
+                    
+                    console.log('Added to allData:', { ...markerData, lat, lon, soilLayers }); // Debug: ตรวจสอบข้อมูลที่เพิ่มเข้า allDatasoilLayersHtml = '<div class="p-2 rounded mb-1 bg-gray-200 text-gray-600 text-xs">ไม่มีข้อมูลชั้นดิน</div>';
+                });
+                
+                // Adjust map view to fit all markersrn `
+                if (markerCluster.getBounds().isValid()) {
+                    map.fitBounds(markerCluster.getBounds());ue-800">บ่อ #${boreholeId}</h3>
+                }
+                pth} เมตร</p>
+                // Update filter options based on the data    <p><strong>ระดับน้ำบาดาล:</strong> ${waterLevel} เมตร</p>
+                populateFilterOptions();
+                
+                // Initialize data cards display    ${soilLayersHtml}
+                displayDataCards();
+                
+                // Debug: แสดงข้อมูลสุดท้ายที่ได้t-white font-medium py-2 px-4 rounded text-sm transition-colors duration-200">
+                console.log('Final allData array:', allData);
+                console.log('Final allMarkers array:', allMarkers);</button>
+                console.log('Total data items:', allData.length);
+                
+            } catch (error) {
+                console.error('Error fetching or parsing sheet data:', error);
+                 location data (for markers)
+                // Hide loading and show error message(name, type, details, participants, status, date) {
+                const loading = document.getElementById('dataLoading');
+                const dataCards = document.getElementById('dataCards');
+                const noData = document.getElementById('noData');
+                
+                loading.classList.add('hidden');class="inline-block px-2 py-0.5 rounded-full text-xs ${getStatusClass(status)}">${status}</span>
+                dataCards.classList.add('hidden');  <span class="inline-block px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-800">${type}</span>
+                noData.classList.remove('hidden');   </div>
+                       <div class="border-t pt-2 text-sm">
+                // Update no data message to show error                    <p class="mb-1"><strong>รายละเอียด:</strong> ${details}</p>
+                noData.innerHTML = `p>
+                    <div class="text-center text-red-500 py-4">
+                        <div class="text-sm md:text-base mb-2">ไม่สามารถโหลดข้อมูลจาก Google Sheet ได้</div>
+                        <div class="text-xs text-gray-500">กรุณาตรวจสอบ URL และการตั้งค่าการเผยแพร่</div></div>
+                        <div class="text-xs text-gray-500 mt-2">URL ปัจจุบัน: ${googleSheetCsvUrl}</div>
+                    </div>
+                `;
+            } to open detail popup (สำหรับปุ่มในส่วนข้อมูลเพิ่มเติม)
+        }nDetailPopup(itemId) {
+
+        // Helper function to create a simple popup for borehole data (for markers)
+        function createBoreholePopup(boreholeId, totalDepth, waterLevel, soilLayers) {// Find the data for this item from allData array
+            let soilLayersHtml = '';emData = allData.find(item => item.id === itemId);
+            
+            if (soilLayers.length > 0) {
+                soilLayers.forEach(layer => {.map(item => ({ id: item.id, name: item.name })));
+                    soilLayersHtml += `<div class="p-2 rounded mb-1 text-xs" style="background-color: ${layer.color}; color: ${getTextColorForBackground(layer.color)};">${layer.name} (${layer.depth})</div>`;
+                });
+            } else {
+                soilLayersHtml = '<div class="p-2 rounded mb-1 bg-gray-200 text-gray-600 text-xs">ไม่มีข้อมูลชั้นดิน</div>';
+            }ata:', itemData); // Debug log
+            
+            return `
+            <div class="w-64 md:w-72">xOf('/') + 1));
+                <h3 class="text-lg font-semibold mb-2 text-blue-800">บ่อ #${boreholeId}</h3>
+                <div class="text-sm text-gray-600 mb-2 space-y-1">ata as URL parameters
+                    <p><strong>ความลึกทั้งหมด:</strong> ${totalDepth} เมตร</p>Url.searchParams.set('id', itemId);
+                    <p><strong>ระดับน้ำบาดาล:</strong> ${waterLevel} เมตร</p>
+                </div>   // Add specific data based on item type
+                <div class="space-y-1 mb-3">            if (itemData.type === 'บ่อบาดาล' || itemData.totalDepth) {
+                    ${soilLayersHtml}
+                </div>
+                <button onclick="openDetailPopup('${boreholeId}')" ilUrl.searchParams.set('waterLevel', itemData.waterLevel || '');
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded text-sm transition-colors duration-200">
+                    ดูรายละเอียดเพิ่มเติม
+                </button>ayers && itemData.soilLayers.length > 0) {
+            </div>
+            `;
+        }
+
+        // Helper function to create a simple popup for location data (for markers)
+        function createLocationPopup(name, type, details, participants, status, date) {
+            return `'');
+            <div class="w-64 md:w-72">Url.searchParams.set('details', itemData.details || '');
+                <h3 class="text-lg font-semibold mb-1">${name}</h3>
+                <div class="mb-2">
+                    <span class="inline-block px-2 py-0.5 rounded-full text-xs ${getStatusClass(status)}">${status}</span>   // Open detail.html in a new tab
+                    <span class="inline-block px-2 py-0.5 rounded-full text-xs bg-gray-200 text-gray-800">${type}</span>            window.open(detailUrl.toString(), '_blank');
+                </div>
+                <div class="border-t pt-2 text-sm">
+                    <p class="mb-1"><strong>รายละเอียด:</strong> ${details}</p>from Google Sheet
+                    <p class="mb-1"><strong>ผู้เข้าร่วม:</strong> ${participants}</p>tion createDetailPopupContent(data) {
+                    <p class="mb-1"><strong>วันที่:</strong> ${date}</p>
+                </div>
+            </div> = parseFloat(data.waterLevel) || 32;
+            `;
+        }
+
+        // Function to open detail popup (สำหรับปุ่มในส่วนข้อมูลเพิ่มเติม)ass="bg-white rounded-lg border p-6 mb-6">
+        function openDetailPopup(itemId) {       <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+            console.log('Opening detail popup for ID:', itemId); // Debug log                        <div>
+            รหัสบ่อ</h3>
+            // Find the data for this item from allData array                            <p class="text-xl font-bold text-blue-600">#${data.id}</p>
+            const itemData = allData.find(item => item.id === itemId);
+            if (!itemData) {
+                console.error('Item data not found in allData:', itemId);                <h3 class="text-sm text-gray-500 mb-1">ความลึกทั้งหมด</h3>
+                console.log('Available items in allData:', allData.map(item => ({ id: item.id, name: item.name })));font-bold text-gray-800">${totalDepth} เมตร</p>
+                alert('ไม่พบข้อมูลสำหรับรายการนี้');
+                return;            <div>
+            }-gray-500 mb-1">ระดับน้ำบาดาล</h3>
+t-bold text-blue-500">${waterLevel} เมตร</p>
+            console.log('Found item data:', itemData); // Debug log
+
+            // Create URL with parameters for detail.html
+            const detailUrl = new URL('detail.html', window.location.origin + window.location.pathname.substring(0, window.location.pathname.lastIndexOf('/') + 1));
+            
+            // Add item data as URL parameters
+            detailUrl.searchParams.set('id', itemId);
+               <div class="space-y-3">
+            // Add specific data based on item type    <div class="flex items-center space-x-3">
+            if (itemData.type === 'บ่อบาดาล' || itemData.totalDepth) {el class="text-sm font-medium text-gray-700 w-16">ระดับ:</label>
+                // Borehole dataass="flex-1 water-level-slider" 
+                detailUrl.searchParams.set('totalDepth', itemData.totalDepth || '');waterLevel}" step="0.1"
+                detailUrl.searchParams.set('waterLevel', itemData.waterLevel || '');ht, #3b82f6 0%, #3b82f6 ${(waterLevel/totalDepth)*100}%, #e5e7eb ${(waterLevel/totalDepth)*100}%, #e5e7eb 100%);">
+                ium text-blue-600 w-16">${waterLevel} ม.</span>
+                // Add soil layers data if available           </div>
+                if (itemData.soilLayers && itemData.soilLayers.length > 0) {            <div class="flex justify-between text-xs text-gray-500">
+                    detailUrl.searchParams.set('soilLayers', JSON.stringify(itemData.soilLayers));>
+                }>
+            } else {               </div>
+                // Location data                    </div>
+                detailUrl.searchParams.set('name', itemData.name || '');
+                detailUrl.searchParams.set('type', itemData.type || '');
+                detailUrl.searchParams.set('status', itemData.status || '');
+                detailUrl.searchParams.set('details', itemData.details || '');
+            }ay-800">แผนผังชั้นดิน</h3>
+                                <div class="relative border-2 border-blue-300 rounded-lg p-3 bg-gradient-to-b from-blue-50 to-blue-100" style="height: 350px;">
+            // Open detail.html in a new tab    <!-- Water level indicator -->
+            window.open(detailUrl.toString(), '_blank');terIndicator" class="absolute right-0 w-full h-0.5 bg-blue-500 z-10" style="top: ${(waterLevel/totalDepth)*100}%;"></div>
+        } right-0 bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold transform -translate-y-1/2 z-10" style="top: ${(waterLevel/totalDepth)*100}%;">
+
+        // Create detail popup content (based on detail.html) with real data from Google Sheet>
+        function createDetailPopupContent(data) {
+            const soilLayers = data.soilLayers || [];
+            const totalDepth = parseFloat(data.totalDepth) || 52;d="popupSoilContainer" class="relative h-full">
+            const waterLevel = parseFloat(data.waterLevel) || 32;{createSoilLayersHtml(soilLayers, totalDepth)}
+
+            return `
+                <!-- Basic Info Card -->
+                <div class="bg-white rounded-lg border p-6 mb-6">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+                        <div>
+                            <h3 class="text-sm text-gray-500 mb-1">รหัสบ่อ</h3>Details -->
+                            <p class="text-xl font-bold text-blue-600">#${data.id}</p>lass="bg-white rounded-lg border p-6">
+                        </div>  <h3 class="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">รายละเอียดชั้นดิน</h3>
+                        <div>                        <div class="space-y-3">
+                            <h3 class="text-sm text-gray-500 mb-1">ความลึกทั้งหมด</h3>ilsHtml(soilLayers)}
+                            <p class="text-xl font-bold text-gray-800">${totalDepth} เมตร</p>
+                        </div>
+                        <div>
+                            <h3 class="text-sm text-gray-500 mb-1">ระดับน้ำบาดาล</h3>
+                            <p id="popupWaterLevel" class="text-xl font-bold text-blue-500">${waterLevel} เมตร</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Water Level Control -->
+                <div class="bg-white rounded-lg border p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-800">ปรับระดับน้ำบาดาล</h3>
+                    <div class="space-y-3">
+                        <div class="flex items-center space-x-3">
+                            <label class="text-sm font-medium text-gray-700 w-16">ระดับ:</label>s for detail popup content using real Google Sheet data
+                            <input type="range" id="popupWaterSlider" class="flex-1 water-level-slider" eSoilLayersHtml(soilLayers, totalDepth) {
+                                   min="0" max="${totalDepth}" value="${waterLevel}" step="0.1"            if (soilLayers.length === 0) {
+                                   style="background: linear-gradient(to right, #3b82f6 0%, #3b82f6 ${(waterLevel/totalDepth)*100}%, #e5e7eb ${(waterLevel/totalDepth)*100}%, #e5e7eb 100%);">-full flex items-center justify-center text-gray-500 text-sm">ไม่มีข้อมูลชั้นดิน</div>';
+                            <span id="popupWaterValue" class="text-sm font-medium text-blue-600 w-16">${waterLevel} ม.</span>
+                        </div>
+                        <div class="flex justify-between text-xs text-gray-500">
+                            <span>0 ม.</span>"0-8 ม." or "8-20"
+                            <span>${totalDepth} ม.</span>
+                        </div>
+                    </div>]) || (startDepth + 10);
+                </div>
+yerHeight = Math.max(((endDepth - startDepth) / totalDepth) * 100, 5); // Minimum 5% height
+                <!-- Soil Diagram --> / totalDepth) * 100;
+                <div class="bg-white rounded-lg border p-6 mb-6">
+                    <h3 class="text-lg font-semibold mb-4 text-gray-800">แผนผังชั้นดิน</h3>
+                    <div class="relative border-2 border-blue-300 rounded-lg p-3 bg-gradient-to-b from-blue-50 to-blue-100" style="height: 350px;">="absolute w-full rounded transition-all duration-300 hover:scale-105 hover:z-20 soil-layer" style="
+                        <!-- Water level indicator -->p: ${layerTop}%; 
+                        <div id="popupWaterIndicator" class="absolute right-0 w-full h-0.5 bg-blue-500 z-10" style="top: ${(waterLevel/totalDepth)*100}%;"></div>  height: ${layerHeight}%; 
+                        <div id="popupWaterLabel" class="absolute right-0 bg-blue-500 text-white px-2 py-1 rounded text-xs font-bold transform -translate-y-1/2 z-10" style="top: ${(waterLevel/totalDepth)*100}%;">                        background-color: ${layer.color}; 
+                            ระดับน้ำบาดาล ${waterLevel}mlorForBackground(layer.color)};
+                        </div>
+                        tyle.borderColor='#1f2937'" onmouseout="this.style.borderColor='transparent'">
+                        <!-- Soil layers -->tify-center relative">
+                        <div id="popupSoilContainer" class="relative h-full">
+                            ${createSoilLayersHtml(soilLayers, totalDepth)} opacity-90">${layer.depth}</div>
+                        </div> transform -translate-y-1/2 bg-black bg-opacity-60 text-white px-2 py-1 rounded text-xs font-bold">
+                    </div>  ${Math.round(layerHeight)}%
+                </div>  </div>
+                        </div>
+                <!-- Information Boxes -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <!-- Soil Details -->
+                    <div class="bg-white rounded-lg border p-6">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">รายละเอียดชั้นดิน</h3>
+                        <div class="space-y-3">ailsHtml(soilLayers) {
+                            ${createSoilDetailsHtml(soilLayers)}.length === 0) {
+                        </div> '<div class="text-sm text-gray-500">ไม่มีข้อมูลชั้นดิน</div>';
+                    </div>
+
+                    <!-- pH Values -->            return soilLayers.map(layer => `
+                    <div class="bg-white rounded-lg border p-6">hover:bg-gray-100 transition-colors">
+                        <h3 class="text-lg font-semibold mb-4 text-gray-800 border-b pb-2">ค่า pH</h3>x-shrink-0" style="background-color: ${layer.color};"></div>
+                        <div class="space-y-3">
+                            ${createPhValuesHtml(soilLayers)}
+                        </div>           <div class="text-xs text-gray-600 mt-1">${layer.desc || 'ไม่มีรายละเอียด'}</div>
+                    </div>                    </div>
+                </div>
+            `;
+        }
+
+        // Helper functions for detail popup content using real Google Sheet data
+        function createSoilLayersHtml(soilLayers, totalDepth) {t layersWithPh = soilLayers.filter(layer => layer.ph && layer.ph !== '');
+            if (soilLayers.length === 0) {
+                return '<div class="h-full flex items-center justify-center text-gray-500 text-sm">ไม่มีข้อมูลชั้นดิน</div>';
+            }                return '<div class="text-sm text-gray-500">ไม่มีข้อมูลค่า pH</div>';
+
+            return soilLayers.map((layer, index) => {
+                // Parse depth range from string like "0-8 ม." or "8-20"> `
+                const depthParts = layer.depth.replace(/[ม\.]/g, '').split('-');tify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                const startDepth = parseFloat(depthParts[0]) || (index * 10);3">
+                const endDepth = parseFloat(depthParts[1]) || (startDepth + 10);nd-color: ${layer.color};"></div>
+                sm">${layer.name} (${layer.depth})</span>
+                const layerHeight = Math.max(((endDepth - startDepth) / totalDepth) * 100, 5); // Minimum 5% height
+                const layerTop = (startDepth / totalDepth) * 100;>
+
+                return `
+                    <div class="absolute w-full rounded transition-all duration-300 hover:scale-105 hover:z-20 soil-layer" style="
+                        top: ${layerTop}%; 
+                        height: ${layerHeight}%; features in detail popup with real data
+                        background-color: ${layer.color}; ailPopup(data) {
+                        color: ${getTextColorForBackground(layer.color)}; document.getElementById('popupWaterSlider');
+                        border: 2px solid transparent;waterValue = document.getElementById('popupWaterValue');
+                    " onmouseover="this.style.borderColor='#1f2937'" onmouseout="this.style.borderColor='transparent'">evel = document.getElementById('popupWaterLevel');
+                        <div class="p-2 h-full flex flex-col justify-center relative">   const waterIndicator = document.getElementById('popupWaterIndicator');
+                            <div class="font-medium text-sm">${layer.name}</div>            const waterLabel = document.getElementById('popupWaterLabel');
+                            <div class="text-xs opacity-90">${layer.depth}</div>Depth) || 52;
+                            <div class="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-60 text-white px-2 py-1 rounded text-xs font-bold">
+                                ${Math.round(layerHeight)}%
+                            </div>   slider.addEventListener('input', function() {
+                        </div>                    const newLevel = parseFloat(this.value);
+                    </div>evel / totalDepth) * 100;
+                `;
+            }).join('');
+        }nt = `${newLevel.toFixed(1)} ม.`;
+
+        function createSoilDetailsHtml(soilLayers) {
+            if (soilLayers.length === 0) {
+                return '<div class="text-sm text-gray-500">ไม่มีข้อมูลชั้นดิน</div>'; Update slider background
+            }.style.background = `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${percentage}%, #e5e7eb ${percentage}%, #e5e7eb 100%)`;
+           
+            return soilLayers.map(layer => `                    // Update water level indicator position
+                <div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">rcentage + '%';
+                    <div class="w-4 h-4 rounded-full mt-0.5 flex-shrink-0" style="background-color: ${layer.color};"></div>
+                    <div class="flex-1">    });
+                        <div class="font-medium text-sm">${layer.name} (${layer.depth})</div>
+                        <div class="text-xs text-gray-600 mt-1">${layer.desc || 'ไม่มีรายละเอียด'}</div>
+                    </div>
+                </div>        // Function to display data cards
+            `).join('');
+        }
+rds');
+        function createPhValuesHtml(soilLayers) {
+            const layersWithPh = soilLayers.filter(layer => layer.ph && layer.ph !== '');
+            g
+            if (layersWithPh.length === 0) {
+                return '<div class="text-sm text-gray-500">ไม่มีข้อมูลค่า pH</div>';
+            }length === 0) {
+       dataCards.classList.add('hidden');
+            return layersWithPh.map(layer => `                noData.classList.remove('hidden');
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors">
+                    <div class="flex items-center space-x-3">
+                        <div class="w-4 h-4 rounded-full" style="background-color: ${layer.color};"></div>
+                        <span class="font-medium text-sm">${layer.name} (${layer.depth})</span>
+                    </div>
+                    <span class="text-lg font-bold text-blue-600">pH ${layer.ph}</span>
+                </div>
+            `).join('');
+        }            currentPage = 1;
+ds();
+        // Initialize interactive features in detail popup with real data
+        function initializeDetailPopup(data) {
+            const slider = document.getElementById('popupWaterSlider');
+            const waterValue = document.getElementById('popupWaterValue');to render data cards with pagination
+            const waterLevel = document.getElementById('popupWaterLevel');
+            const waterIndicator = document.getElementById('popupWaterIndicator');
+            const waterLabel = document.getElementById('popupWaterLabel');
+            const totalDepth = parseFloat(data.totalDepth) || 52;
+late pagination
+            if (slider) {) * itemsPerPage;
+                slider.addEventListener('input', function() {
+                    const newLevel = parseFloat(this.value);rrentItems = allData.slice(startIndex, endIndex);
+                    const percentage = (newLevel / totalDepth) * 100;
+                    
+                    // Update display values
+                    waterValue.textContent = `${newLevel.toFixed(1)} ม.`;
+                    waterLevel.textContent = `${newLevel.toFixed(1)} เมตร`;/ Create cards for current page
+                    waterLabel.textContent = `ระดับน้ำบาดาล ${newLevel.toFixed(1)}m`;   currentItems.forEach(item => {
+                                    const cardHtml = createDataCard(item);
+                    // Update slider backgroundent.createElement('div');
+                    this.style.background = `linear-gradient(to right, #3b82f6 0%, #3b82f6 ${percentage}%, #e5e7eb ${percentage}%, #e5e7eb 100%)`; = cardHtml;
+                    
+                    // Update water level indicator position
+                    waterIndicator.style.top = percentage + '%';
+                    waterLabel.style.top = percentage + '%';
+                });te a data card HTML
+            }
+        }console.log('Creating card for item:', item); // Debug: แสดงข้อมูลทั้งหมดของ item
+
+        // Function to display data cardsm.totalDepth || item.type === 'บ่อบาดาล');
+        function displayDataCards() {
+            const dataLoading = document.getElementById('dataLoading');oleData) {
+            const dataCards = document.getElementById('dataCards');   // Borehole data card - แสดงข้อมูลจริงจาก Google Sheet
+            const noData = document.getElementById('noData');    let soilLayersDisplay = '';
+            ayers && item.soilLayers.length > 0) {
+            // Hide loadingLayers.map(layer => 
+            dataLoading.classList.add('hidden');tems-center space-x-2">
+                            <div class="w-3 h-3 rounded-full border border-gray-300" style="background-color: ${layer.color}"></div>
+            if (allData.length === 0) {-xs">${layer.name} (${layer.depth})</span>
+                dataCards.classList.add('hidden');v>`
+                noData.classList.remove('hidden');;
+                return;
+            }           soilLayersDisplay = '<div class="text-xs text-gray-500">ไม่มีข้อมูลชั้นดิน</div>';
+                            }
+            // Show data cards
+            dataCards.classList.remove('hidden');
+            noData.classList.add('hidden');3 md:p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onclick="jumpToMarker('${item.id}')">
+            x items-start justify-between mb-2">
+            // Reset to first page and render            <h3 class="font-semibold text-sm md:text-base text-gray-800 line-clamp-1">บ่อ #${item.id}</h3>
+            currentPage = 1;="inline-block px-2 py-0.5 rounded-full text-xs ${getStatusClass(item.status)}">${item.status}</span>
+            renderDataCards();
+            setupPagination();
+        }y-600 mb-3">
+            <div class="flex justify-between">
+        // Function to render data cards with paginationวามลึกทั้งหมด:</span>
+        function renderDataCards() {ss="font-medium">${item.totalDepth} ม.</span>
+            const container = document.querySelector('#dataCards .grid');            </div>
+            if (!container) return;tify-between">
+            บาดาล:</span>
+            // Calculate paginationext-blue-600">${item.waterLevel} ม.</span>
+            const startIndex = (currentPage - 1) * itemsPerPage;
+            const endIndex = startIndex + itemsPerPage;
+            const currentItems = allData.slice(startIndex, endIndex);
+                 <div class="mb-3">
+            // Clear existing cards               <div class="text-xs font-medium text-gray-700 mb-1">ชั้นดิน:</div>
+            container.innerHTML = '';                        <div class="space-y-1">
+            y}
+            // Create cards for current page
+            currentItems.forEach(item => {
+                const cardHtml = createDataCard(item);        
+                const cardElement = document.createElement('div'); 
+                cardElement.innerHTML = cardHtml;                class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-3 rounded text-sm transition-colors duration-200">
+                container.appendChild(cardElement.firstElementChild);่มเติม
+            });
+        }
+
+        // Function to create a data card HTML
+        function createDataCard(item) {gle Sheet
+            console.log('Creating card for item:', item); // Debug: แสดงข้อมูลทั้งหมดของ item
+            w-sm hover:shadow-md transition-shadow cursor-pointer" onclick="jumpToMarker('${item.id}')">
+            const isBoreholeData = item.id && (item.totalDepth || item.type === 'บ่อบาดาล');"flex items-start justify-between mb-2">
+            ss="font-semibold text-sm md:text-base text-gray-800 line-clamp-1">${item.name}</h3>
+            if (isBoreholeData) {<span class="inline-block px-2 py-0.5 rounded-full text-xs ${getStatusClass(item.status)}">${item.status}</span>
+                // Borehole data card - แสดงข้อมูลจริงจาก Google Sheet
+                let soilLayersDisplay = '';   
+                if (item.soilLayers && item.soilLayers.length > 0) {    <div class="space-y-1 text-xs md:text-sm text-gray-600 mb-3">
+                    soilLayersDisplay = item.soilLayers.map(layer => <div><span class="font-medium">ประเภท:</span> ${item.type}</div>
+                        `<div class="flex items-center space-x-2">
+                            <div class="w-3 h-3 rounded-full border border-gray-300" style="background-color: ${layer.color}"></div>edium">ผู้เข้าร่วม:</span> ${item.participants}</div>` : ''}
+                            <span class="text-xs">${layer.name} (${layer.depth})</span>
+                        </div>`
+                    ).join('');
+                } else {<button onclick="event.stopPropagation(); openDetailPopup('${item.id}')" 
+                    soilLayersDisplay = '<div class="text-xs text-gray-500">ไม่มีข้อมูลชั้นดิน</div>';e font-medium py-2 px-3 rounded text-sm transition-colors duration-200">
+                }
+                
+                return `
+                <div class="bg-white border border-gray-200 rounded-lg p-3 md:p-4 shadow-sm hover:shadow-md transition-shadow cursor-pointer" onclick="jumpToMarker('${item.id}')">
+                    <div class="flex items-start justify-between mb-2">
+                        <h3 class="font-semibold text-sm md:text-base text-gray-800 line-clamp-1">บ่อ #${item.id}</h3>
+                        <span class="inline-block px-2 py-0.5 rounded-full text-xs ${getStatusClass(item.status)}">${item.status}</span>
+                    </div>agination
+                    nation() {
+                    <div class="space-y-2 text-xs md:text-sm text-gray-600 mb-3">talPages = Math.ceil(allData.length / itemsPerPage);
+                        <div class="flex justify-between">t.getElementById('prevPage');
+                            <span>ความลึกทั้งหมด:</span>
+            const pageInfo = document.getElementById('pageInfo');
+            
+            // Update page info
+            pageInfo.textContent = `หน้า ${currentPage} จาก ${totalPages}`;
+            
+            // Update button states
+            prevButton.disabled = currentPage === 1;
+            nextButton.disabled = currentPage === totalPages || totalPages === 0;
+            
+            // Remove existing event listeners
+            prevButton.replaceWith(prevButton.cloneNode(true));
+            nextButton.replaceWith(nextButton.cloneNode(true));
+            
+            // Get fresh references
+            const newPrevButton = document.getElementById('prevPage');
+            const newNextButton = document.getElementById('nextPage');
+            
+            // Add new event listeners
+            newPrevButton.addEventListener('click', () => {
+                if (currentPage > 1) {
+                    currentPage--;
+                    renderDataCards();
+                    setupPagination();
+                }
+            });
+            
+            newNextButton.addEventListener('click', () => {
+                if (currentPage < totalPages) {
+                    currentPage++;
+                    renderDataCards();
+                    setupPagination();
+                }
+            });
+        }
+
+        // Function to close detail modal
+        function closeDetailModal() {
+            const modal = document.getElementById('detailModal');
+            modal.classList.add('hidden');
+            document.body.style.overflow = '';
+        }
+
+        // Function to apply filters (placeholder - can be enhanced)
+        function applyFilters() {
+            // For now, just re-render the cards
+            // In the future, this could filter allData based on search/filter criteria
+            currentPage = 1;
+            renderDataCards();
+            setupPagination();
+        }
+
+        // Function to reset filters (placeholder - can be enhanced)
+        function resetFilters() {
+            // Reset filter controls
+            document.getElementById('filterType').value = '';
+            document.getElementById('filterStatus').value = '';
+            document.getElementById('searchInput').value = '';
+            
+            // Re-render all data
+            currentPage = 1;
+            renderDataCards();
+            setupPagination();
+        }
+
+        // Function to populate filter options (placeholder - can be enhanced)
+        function populateFilterOptions() {
+            // This function can be enhanced to populate filter dropdowns
+            // based on the actual data in allData
+        }
+
+        // Function to jump to marker on map when clicking data card
+        function jumpToMarker(markerId) {
+            // Find the marker in allMarkers array (search by id or name)
+            const markerInfo = allMarkers.find(m => m.id === markerId || m.name === markerId);
+            if (!markerInfo || !markerInfo.marker) {
+                console.error('Marker not found:', markerId);
+                return;
+            }
+            
+            // Get marker position
+            const marker = markerInfo.marker;
+            const lat = marker.getLatLng().lat;
+            const lng = marker.getLatLng().lng;
+            
+            // Pan and zoom to the marker
+            map.setView([lat, lng], 16, {
+                animate: true,
+                duration: 1.0 // Animation duration in seconds
+            });
+            
+            // Open marker popup after a short delay
+            setTimeout(() => {
+                marker.openPopup();
+            }, 500);
+            
+            // Scroll to top to see the map better (optional)
+            window.scrollTo({
+                top: 0,
+                behavior: 'smooth'
+            });
+        }
+
+        // Initialize the data
+        fetchSheetData();
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            // Filter events
+            document.getElementById('applyFilters').addEventListener('click', applyFilters);
+            document.getElementById('resetFilters').addEventListener('click', resetFilters);
+            document.getElementById('searchInput').addEventListener('keyup', function(event) {
+                if (event.key === 'Enter') {
+                    applyFilters();
+                }
+            });
+            
+            // Modal events
+            document.getElementById('closeModal').addEventListener('click', closeDetailModal);
+            document.getElementById('detailModal').addEventListener('click', function(event) {
+                // Close modal when clicking outside the content
+                if (event.target === this) {
+                    closeDetailModal();
+                }
+            });
+            
+            // Close modal with Escape key
+            document.addEventListener('keydown', function(event) {
+                if (event.key === 'Escape') {
+                    closeDetailModal();
+                }
+            });
+        });
+    </script>
+
+</body>
+</html>
